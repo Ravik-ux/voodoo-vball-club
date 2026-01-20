@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="Voodoo 15-2 Tracker", layout="wide")
+st.set_page_config(page_title="Voodoo 15-2 Stats Tracker", layout="wide")
 
 # --- CUSTOM CSS ---
 st.markdown("""
