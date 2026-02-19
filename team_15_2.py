@@ -2,142 +2,125 @@ import streamlit as st
 import pandas as pd
 
 # --- APP CONFIG ---
-st.set_page_config(page_title="Voodoo 15-2 Stat Tracker", layout="wide")
+st.set_page_config(page_title="Voodoo Tournament Stats", layout="wide")
 
-# --- MOBILE CSS ---
+# --- CSS TO MAKE IT LOOK LIKE THE PRO TABLE ---
 st.markdown("""
     <style>
-    div.stButton > button { height: 3.5em; font-weight: bold; border-radius: 8px; margin-bottom: 5px; }
-    .score-box { background-color: #1e1e1e; color: #00ff00; padding: 10px; border-radius: 10px; text-align: center; border: 2px solid #444; }
-    .score-val { font-size: 32px; font-weight: bold; }
-    .section-header { padding: 4px; border-radius: 4px; text-align: center; font-weight: bold; margin-top: 10px; color: white; font-size: 13px; }
+    .stDataFrame { border: 1px solid #444; }
+    div.stButton > button { height: 3em; font-size: 14px !important; font-weight: bold; border-radius: 4px; }
+    .score-text { font-size: 24px; font-weight: bold; color: #00ff00; text-align: center; }
     </style>
     """, unsafe_allow_html=True)
 
 # --- DATA INITIALIZATION ---
 if 'roster' not in st.session_state:
+    # Exact order and names/numbers
     st.session_state.roster = [
         "20 - Hadyn", "30 - Zooey", "1 - Taytem", "2 - Ella", "3 - Aditi", 
         "11 - Luna", "12 - Joy", "98 - Bria", "21 - Avery", "22 - Kannon"
     ]
 
+# Columns in the EXACT order shown in the photo
+stat_cols = [
+    'Played', 'Atk ATM', 'Atk K', 'Atk ERR', 'Atk %', 
+    'Set AST', 'Srv ATM', 'Srv ACE', 'Srv ERR', 'Srv %', 
+    'DIG', 'DIG ERR', 'SrvRev ERR', 'SrvRev 1', 'SrvRev 2', 
+    'SrvRev 3', 'SrvRev Avg', 'Blk ERR', 'Blk S', 'Blk AS'
+]
+
 if 'set_data' not in st.session_state:
-    # Columns matching your photo's logic
-    cols = [
-        'Atk-ATM', 'Atk-K', 'Atk-ERR', 
-        'Srv-ATM', 'Srv-ACE', 'Srv-ERR',
-        'Dig-DIG', 'Dig-ERR',
-        'SrvRev-ERR', 'SrvRev-1', 'SrvRev-2', 'SrvRev-3',
-        'Blk-ERR', 'Blk-S', 'Blk-AS'
-    ]
     st.session_state.set_data = {
-        "Set 1": pd.DataFrame(0, index=st.session_state.roster, columns=cols),
-        "Set 2": pd.DataFrame(0, index=st.session_state.roster, columns=cols),
-        "Set 3": pd.DataFrame(0, index=st.session_state.roster, columns=cols)
+        "Set 1": pd.DataFrame(0.0, index=st.session_state.roster, columns=stat_cols),
+        "Set 2": pd.DataFrame(0.0, index=st.session_state.roster, columns=stat_cols),
+        "Set 3": pd.DataFrame(0.0, index=st.session_state.roster, columns=stat_cols)
     }
     st.session_state.scores = {"Set 1": [0,0], "Set 2": [0,0], "Set 3": [0,0]}
     st.session_state.active_player = st.session_state.roster[0]
 
-# --- SET TABS ---
-set_tabs = st.tabs(["Set 1", "Set 2", "Set 3"])
+# --- TOP NAVIGATION (SETS) ---
+st.write(f"### Match vs. Opponent")
+st_tab1, st_tab2, st_tab3 = st.tabs(["Set 1", "Set 2", "Set 3"])
 
-for i, set_label in enumerate(["Set 1", "Set 2", "Set 3"]):
-    with set_tabs[i]:
-        df = st.session_state.set_data[set_label]
-        
-        # Scoreboard
-        c1, c2, c3 = st.columns([2,1,2])
-        with c1:
-            st.markdown(f"<div class='score-box'>VOODOO<br><span class='score-val'>{st.session_state.scores[set_label][0]}</span></div>", unsafe_allow_html=True)
-            if st.button("➕ Pt", key=f"v_up_{set_label}"):
-                st.session_state.scores[set_label][0] += 1
-                st.rerun()
-        with c3:
-            st.markdown(f"<div class='score-box'>OPP<br><span class='score-val'>{st.session_state.scores[set_label][1]}</span></div>", unsafe_allow_html=True)
-            if st.button("➕ Pt", key=f"o_up_{set_label}"):
-                st.session_state.scores[set_label][1] += 1
-                st.rerun()
+def render_set(set_name):
+    df = st.session_state.set_data[set_name]
+    
+    # Header: Score and Active Player
+    c1, c2, c3 = st.columns([1,2,1])
+    with c1:
+        st.write(f"**VOODOO: {st.session_state.scores[set_name][0]}**")
+    with c2:
+        st.session_state.active_player = st.selectbox(f"Select Player to Stat ({set_name})", st.session_state.roster, key=f"select_{set_name}")
+    with c3:
+        st.write(f"**OPP: {st.session_state.scores[set_name][1]}**")
 
-        # Input Section
-        col_p, col_a = st.columns([1, 2])
-        
-        with col_p:
-            st.write("**Player**")
-            for player in st.session_state.roster:
-                is_active = st.session_state.active_player == player
-                if st.button(player, key=f"sel_{player}_{set_label}", type="primary" if is_active else "secondary"):
-                    st.session_state.active_player = player
-                    st.rerun()
-        
-        with col_a:
-            active = st.session_state.active_player
-            st.write(f"**Logging: {active}**")
+    # ACTION BUTTONS (Compact Grid)
+    active = st.session_state.active_player
+    
+    col_atk, col_srv, col_rec, col_def = st.columns(4)
+    
+    with col_atk:
+        st.caption("ATTACK")
+        bt1, bt2 = st.columns(2)
+        if bt1.button("K", key=f"k_{set_name}"):
+            df.at[active, 'Atk K'] += 1
+            df.at[active, 'Atk ATM'] += 1
+            st.session_state.scores[set_name][0] += 1
+        if bt2.button("E", key=f"e_{set_name}"):
+            df.at[active, 'Atk ERR'] += 1
+            df.at[active, 'Atk ATM'] += 1
+            st.session_state.scores[set_name][1] += 1
             
-            # ATTACK
-            st.markdown("<div class='section-header' style='background-color:#0077b6;'>ATTACK</div>", unsafe_allow_html=True)
-            a1, a2, a3 = st.columns(3)
-            if a1.button("K", key=f"k_{set_label}"): 
-                df.at[active, 'Atk-K'] += 1
-                df.at[active, 'Atk-ATM'] += 1
-                st.session_state.scores[set_label][0] += 1
-            if a2.button("ERR", key=f"ae_{set_label}"): 
-                df.at[active, 'Atk-ERR'] += 1
-                df.at[active, 'Atk-ATM'] += 1
-                st.session_state.scores[set_label][1] += 1
-            if a3.button("ATM", key=f"aa_{set_label}"): df.at[active, 'Atk-ATM'] += 1
+    with col_srv:
+        st.caption("SERVE")
+        bs1, bs2 = st.columns(2)
+        if bs1.button("ACE", key=f"ace_{set_name}"):
+            df.at[active, 'Srv ACE'] += 1
+            df.at[active, 'Srv ATM'] += 1
+            st.session_state.scores[set_name][0] += 1
+        if bs2.button("ERR", key=f"se_{set_name}"):
+            df.at[active, 'Srv ERR'] += 1
+            df.at[active, 'Srv ATM'] += 1
+            st.session_state.scores[set_name][1] += 1
 
-            # SERVE
-            st.markdown("<div class='section-header' style='background-color:#7209b7;'>SERVE</div>", unsafe_allow_html=True)
-            s1, s2, s3 = st.columns(3)
-            if s1.button("ACE", key=f"ace_{set_label}"): 
-                df.at[active, 'Srv-ACE'] += 1
-                df.at[active, 'Srv-ATM'] += 1
-                st.session_state.scores[set_label][0] += 1
-            if s2.button("ERR", key=f"se_{set_label}"): 
-                df.at[active, 'Srv-ERR'] += 1
-                df.at[active, 'Srv-ATM'] += 1
-                st.session_state.scores[set_label][1] += 1
-            if s3.button("ATM", key=f"sa_{set_label}"): df.at[active, 'Srv-ATM'] += 1
+    with col_rec:
+        st.caption("PASS (0-3)")
+        r1, r2, r3, r4 = st.columns(4)
+        if r1.button("0", key=f"r0_{set_name}"): 
+            df.at[active, 'SrvRev ERR'] += 1
+            st.session_state.scores[set_name][1] += 1
+        if r2.button("1", key=f"r1_{set_name}"): df.at[active, 'SrvRev 1'] += 1
+        if r3.button("2", key=f"r2_{set_name}"): df.at[active, 'SrvRev 2'] += 1
+        if r4.button("3", key=f"r3_{set_name}"): df.at[active, 'SrvRev 3'] += 1
 
-            # SERVE RECEIVE
-            st.markdown("<div class='section-header' style='background-color:#2b9348;'>SERVE RECEIVE</div>", unsafe_allow_html=True)
-            sr0, sr1, sr2, sr3 = st.columns(4)
-            if sr0.button("0", key=f"sr0_{set_label}"): 
-                df.at[active, 'SrvRev-ERR'] += 1
-                st.session_state.scores[set_label][1] += 1
-            if sr1.button("1", key=f"sr1_{set_label}"): df.at[active, 'SrvRev-1'] += 1
-            if sr2.button("2", key=f"sr2_{set_label}"): df.at[active, 'SrvRev-2'] += 1
-            if sr3.button("3", key=f"sr3_{set_label}"): df.at[active, 'SrvRev-3'] += 1
+    with col_def:
+        st.caption("BLOCK/DIG")
+        d1, d2, d3 = st.columns(3)
+        if d1.button("S", key=f"s_{set_name}"): 
+            df.at[active, 'Blk S'] += 1
+            st.session_state.scores[set_name][0] += 1
+        if d2.button("AS", key=f"as_{set_name}"): df.at[active, 'Blk AS'] += 1
+        if d3.button("D", key=f"d_{set_name}"): df.at[active, 'DIG'] += 1
 
-            # DEFENSE
-            st.markdown("<div class='section-header' style='background-color:#f25c54;'>BLOCK & DIG</div>", unsafe_allow_html=True)
-            b1, b2, b3 = st.columns(3)
-            if b1.button("S-Blk", key=f"sb_{set_label}"): 
-                df.at[active, 'Blk-S'] += 1
-                st.session_state.scores[set_label][0] += 1
-            if b2.button("AS-Blk", key=f"ab_{set_label}"): df.at[active, 'Blk-AS'] += 1
-            if b3.button("DIG", key=f"dg_{set_label}"): df.at[active, 'Dig-DIG'] += 1
+    # CALCULATIONS
+    df['Atk %'] = ((df['Atk K'] - df['Atk ERR']) / df['Atk ATM'].replace(0,1)).round(3)
+    df['Srv %'] = ((df['Srv ATM'] - df['Srv ERR']) / df['Srv ATM'].replace(0,1)).round(2)
+    
+    total_passes = df['SrvRev ERR'] + df['SrvRev 1'] + df['SrvRev 2'] + df['SrvRev 3']
+    pass_pts = (df['SrvRev 1']*1) + (df['SrvRev 2']*2) + (df['SrvRev 3']*3)
+    df['SrvRev Avg'] = (pass_pts / total_passes.replace(0,1)).round(2)
 
-# --- BOX SCORE (AT THE BOTTOM) ---
+    # THE GRID (The Main Attraction)
+    st.write("### Live Set Statistics")
+    st.dataframe(df.style.format(precision=3), use_container_width=True, height=450)
+
+with st_tab1: render_set("Set 1")
+with st_tab2: render_set("Set 2")
+with st_tab3: render_set("Set 3")
+
+# --- MATCH TOTALS AT THE VERY BOTTOM ---
 st.divider()
-st.header("Match Statistics")
-view = st.radio("View:", ["Current Set", "Match Totals"], horizontal=True)
-
-if view == "Match Totals":
-    final_df = st.session_state.set_data["Set 1"] + st.session_state.set_data["Set 2"] + st.session_state.set_data["Set 3"]
-else:
-    # Logic to show the set currently being viewed is simpler as a selectbox for now
-    s_choice = st.selectbox("Show stats for:", ["Set 1", "Set 2", "Set 3"])
-    final_df = st.session_state.set_data[s_choice].copy()
-
-# Calculations
-final_df['Atk %'] = ((final_df['Atk-K'] - final_df['Atk-ERR']) / final_df['Atk-ATM'].replace(0,1)).round(3)
-total_passes = final_df['SrvRev-ERR'] + final_df['SrvRev-1'] + final_df['SrvRev-2'] + final_df['SrvRev-3']
-pass_points = (final_df['SrvRev-1'] * 1) + (final_df['SrvRev-2'] * 2) + (final_df['SrvRev-3'] * 3)
-final_df['SrvRev Avg'] = (pass_points / total_passes.replace(0,1)).round(2)
-
-st.dataframe(final_df, use_container_width=True)
-
-# Download button for local saving
-csv = final_df.to_csv().encode('utf-8')
-st.download_button("Download CSV", csv, "voodoo_stats.csv", "text/csv")
+if st.checkbox("Show Match Totals"):
+    total_df = st.session_state.set_data["Set 1"] + st.session_state.set_data["Set 2"] + st.session_state.set_data["Set 3"]
+    st.write("### Full Match Totals")
+    st.dataframe(total_df, use_container_width=True)
