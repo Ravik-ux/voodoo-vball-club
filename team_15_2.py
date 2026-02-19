@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 # --- APP CONFIG ---
 st.set_page_config(page_title="Voodoo 15-2 Stable Tracker", layout="wide")
@@ -12,6 +13,7 @@ st.markdown("""
         z-index: 9999; background-color: #702963; padding: 15px 30px;
         border-radius: 50px; border: 3px solid #ffee32;
     }
+    .stButton > button { font-weight: bold; color: white; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -32,7 +34,6 @@ stat_cols = [
     'SrvRev ERR', 'SrvRev 1', 'SrvRev 2', 'SrvRev 3', 'SrvRev Avg'
 ]
 
-# Using a more stable storage method
 if 'master_data' not in st.session_state:
     st.session_state.master_data = {
         "Set 1": pd.DataFrame(0, index=st.session_state.roster, columns=stat_cols),
@@ -43,17 +44,23 @@ if 'master_data' not in st.session_state:
 # --- LOGIC ---
 def calculate_metrics(df):
     df = df.copy()
-    # Convert to numeric to prevent errors
+    # Ensure all data is numeric before math
     for col in df.columns:
         if col not in ['Atk %', 'Srv %', 'SrvRev Avg']:
-            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
             
-    df['Atk %'] = ((df['Atk K'] - df['Atk ERR']) / df['Atk ATM'].replace(0,1)).round(3)
-    df['Srv %'] = (((df['Srv ATM'] - df['Srv ERR']) / df['Srv ATM'].replace(0,1)) * 100).round(1)
+    # Atk % Calculation
+    df['Atk %'] = ((df['Atk K'] - df['Atk ERR']) / df['Atk ATM'].replace(0, np.nan))
+    
+    # Srv % Calculation
+    df['Srv %'] = ((df['Srv ATM'] - df['Srv ERR']) / df['Srv ATM'].replace(0, np.nan)) * 100
+    
+    # SrvRev Avg Calculation
     total_passes = df['SrvRev ERR'] + df['SrvRev 1'] + df['SrvRev 2'] + df['SrvRev 3']
     pass_pts = (df['SrvRev 1']*1) + (df['SrvRev 2']*2) + (df['SrvRev 3']*3)
-    df['SrvRev Avg'] = (pass_pts / total_passes.replace(0,1)).round(2)
-    return df
+    df['SrvRev Avg'] = (pass_pts / total_passes.replace(0, np.nan))
+    
+    return df.fillna(0) # Replace NaNs with 0 for the final display
 
 # --- NAVIGATION ---
 st.markdown('<div class="floating-nav">', unsafe_allow_html=True)
@@ -68,27 +75,31 @@ if st.session_state.view_mode == "ENTRY":
     st.title("🏐 DATA ENTRY")
     active_set = st.radio("Current Set:", ["Set 1", "Set 2", "Set 3"], horizontal=True)
     
-    # IMPORTANT: We edit the data directly. We DON'T calculate math here.
-    # This prevents the "resetting to zero" glitch.
+    # Grid Entry
     edited_df = st.data_editor(
         st.session_state.master_data[active_set],
         use_container_width=True,
         height=500,
         key=f"editor_{active_set}"
     )
-    # Save back to vault
     st.session_state.master_data[active_set] = edited_df
 
 else:
     st.title("🏆 SUMMARY MODE")
-    view_set = st.radio("Show:", ["Set 1", "Set 2", "Set 3", "Match Totals"], horizontal=True)
+    view_set = st.radio("Show Stats for:", ["Set 1", "Set 2", "Set 3", "Match Totals"], horizontal=True)
     
     if view_set == "Match Totals":
         raw = st.session_state.master_data["Set 1"] + st.session_state.master_data["Set 2"] + st.session_state.master_data["Set 3"]
     else:
         raw = st.session_state.master_data[view_set]
     
-    # Math happens ONLY here on the Summary Page
     final_df = calculate_metrics(raw)
     
-    st.table(final_df.style.set_precision(2).background_gradient(cmap='Greens', subset=['Atk %', 'SrvRev Avg']))
+    # FIXED STYLING (Removed set_precision)
+    st.table(
+        final_df.style.format({
+            'Atk %': '{:.3f}', 
+            'Srv %': '{:.1f}%', 
+            'SrvRev Avg': '{:.2f}'
+        }).background_gradient(cmap='Greens', subset=['Atk %', 'SrvRev Avg'])
+    )
