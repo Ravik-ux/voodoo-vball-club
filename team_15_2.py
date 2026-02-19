@@ -4,32 +4,33 @@ import pandas as pd
 # --- APP CONFIG ---
 st.set_page_config(page_title="Voodoo 15-2 Stat Pro", layout="wide")
 
-# --- CUSTOM CSS ---
+# --- CUSTOM CSS FOR THE MODE SWITCHER ---
 st.markdown("""
     <style>
     .floating-nav {
         position: fixed;
-        bottom: 20px;
+        bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        z-index: 1000;
+        z-index: 9999;
         background-color: #702963;
-        padding: 10px 20px;
-        border-radius: 30px;
-        border: 2px solid white;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.3);
+        padding: 15px 30px;
+        border-radius: 50px;
+        border: 3px solid #ffee32;
+        box-shadow: 0px 10px 20px rgba(0,0,0,0.5);
     }
-    .stDownloadButton > button {
-        background-color: #2e7d32 !important;
+    .stButton > button {
+        font-size: 18px !important;
+        font-weight: bold !important;
         color: white !important;
-        font-weight: bold;
+        text-transform: uppercase;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- INITIALIZATION ---
 if 'view_mode' not in st.session_state:
-    st.session_state.view_mode = "Input"
+    st.session_state.view_mode = "ENTRY"
 
 if 'roster' not in st.session_state:
     st.session_state.roster = [
@@ -37,12 +38,15 @@ if 'roster' not in st.session_state:
         "11 - Luna", "12 - Joy", "98 - Bria", "21 - Avery", "22 - Kannon"
     ]
 
-# Column Definition
-atk_cols = ['Atk ATM', 'Atk K', 'Atk ERR', 'Atk %']
-srv_cols = ['Srv ATM', 'Srv ACE', 'Srv ERR', 'Srv %']
-rec_cols = ['SrvRev ERR', 'SrvRev 1', 'SrvRev 2', 'SrvRev 3', 'SrvRev Avg']
-def_cols = ['DIG', 'DIG ERR', 'Blk ERR', 'Blk S', 'Blk AS']
-stat_cols = atk_cols + ['Set AST'] + srv_cols + def_cols + rec_cols
+# Define Official Column Order
+stat_cols = [
+    'Played', 
+    'Atk ATM', 'Atk K', 'Atk ERR', 'Atk %', 
+    'Set AST', 
+    'Srv ATM', 'Srv ACE', 'Srv ERR', 'Srv %', 
+    'DIG', 'DIG ERR', 'Blk ERR', 'Blk S', 'Blk AS',
+    'SrvRev ERR', 'SrvRev 1', 'SrvRev 2', 'SrvRev 3', 'SrvRev Avg'
+]
 
 if 'set_dfs' not in st.session_state:
     st.session_state.set_dfs = {
@@ -51,7 +55,7 @@ if 'set_dfs' not in st.session_state:
         "Set 3": pd.DataFrame(0, index=st.session_state.roster, columns=stat_cols)
     }
 
-# --- STATS CALCULATION & STYLING ---
+# --- LOGIC FUNCTIONS ---
 def process_stats(df):
     df = df.copy()
     df['Atk %'] = ((df['Atk K'] - df['Atk ERR']) / df['Atk ATM'].replace(0,1)).round(3)
@@ -62,49 +66,51 @@ def process_stats(df):
     return df
 
 def apply_voodoo_style(df):
+    # Distinct pastel colors for each player row
     player_colors = {
         "20 - Hadyn": "#FFEBEE", "30 - Zooey": "#E3F2FD", "1 - Taytem": "#F3E5F5",
         "2 - Ella": "#E8F5E9", "3 - Aditi": "#FFF3E0", "11 - Luna": "#F1F8E9",
         "12 - Joy": "#E0F2F1", "98 - Bria": "#FFF9C4", "21 - Avery": "#FCE4EC", "22 - Kannon": "#EFEBE9"
     }
-    return df.style.apply(lambda x: [f'background-color: {player_colors.get(x.name, "")}' for i in x], axis=1)
+    return df.style.apply(lambda x: [f'background-color: {player_colors.get(x.name, "#FFFFFF")}' for _ in x], axis=1)
 
-# --- NAVIGATION BUTTON ---
+# --- THE FLOATING SWITCHER ICON ---
 st.markdown('<div class="floating-nav">', unsafe_allow_html=True)
-if st.button(f"VIEW {'SCOREBOARD' if st.session_state.view_mode == 'Input' else 'ENTRY PAGE'}"):
-    st.session_state.view_mode = "Scoreboard" if st.session_state.view_mode == "Input" else "Input"
+button_label = "📊 SWITCH TO SUMMARY MODE" if st.session_state.view_mode == "ENTRY" else "⌨️ SWITCH TO ENTRY MODE"
+if st.button(button_label):
+    st.session_state.view_mode = "SUMMARY" if st.session_state.view_mode == "ENTRY" else "ENTRY"
     st.rerun()
 st.markdown('</div>', unsafe_allow_html=True)
 
 # --- PAGE ROUTING ---
-if st.session_state.view_mode == "Input":
-    st.title("⌨️ Entry Mode")
-    active_set = st.radio("Current Set:", ["Set 1", "Set 2", "Set 3"], horizontal=True)
+if st.session_state.view_mode == "ENTRY":
+    st.title("🏐 STAT ENTRY MODE")
+    active_set = st.radio("Current Match Set:", ["Set 1", "Set 2", "Set 3"], horizontal=True)
+    
+    st.info("Tap a box below to enter stats. Use the purple button at the bottom to see colors.")
+    
     st.session_state.set_dfs[active_set] = st.data_editor(
         st.session_state.set_dfs[active_set],
         use_container_width=True,
         height=500,
-        key=f"edit_{active_set}"
+        key=f"editor_{active_set}"
     )
+
 else:
-    st.title("📊 Match Scoreboard")
-    view_set = st.radio("Display:", ["Set 1", "Set 2", "Set 3", "Match Totals"], horizontal=True)
+    st.title("🏆 STAT SUMMARY MODE")
+    view_set = st.radio("View Totals For:", ["Set 1", "Set 2", "Set 3", "Full Match"], horizontal=True)
     
-    if view_set == "Match Totals":
+    if view_set == "Full Match":
+        # Sum only numeric columns
         raw_df = st.session_state.set_dfs["Set 1"] + st.session_state.set_dfs["Set 2"] + st.session_state.set_dfs["Set 3"]
     else:
         raw_df = st.session_state.set_dfs[view_set]
     
     final_df = process_stats(raw_df)
+    
+    st.subheader(f"Calculated Leaderboard: {view_set}")
     st.table(apply_voodoo_style(final_df))
     
-    # DOWNLOAD SECTION
-    st.divider()
-    st.subheader("💾 Export Match Data")
+    # DOWNLOAD OPTION
     csv = final_df.to_csv().encode('utf-8')
-    st.download_button(
-        label="Download Stats as CSV",
-        data=csv,
-        file_name=f"Voodoo_Stats_{view_set}.csv",
-        mime='text/csv',
-    )
+    st.download_button("📩 DOWNLOAD FINAL BOX SCORE", csv, f"Voodoo_{view_set}.csv", "text/csv")
