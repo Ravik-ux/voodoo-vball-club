@@ -6,15 +6,48 @@ import matplotlib
 # --- APP CONFIG ---
 st.set_page_config(page_title="Voodoo 15-2 Tracker", layout="wide")
 
-# --- CUSTOM CSS ---
+# --- IPAD OPTIMIZED CSS ---
 st.markdown("""
     <style>
-    .floating-nav {
-        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-        z-index: 9999; background-color: #702963; padding: 15px 30px;
-        border-radius: 50px; border: 3px solid #ffee32;
+    /* Dark theme for easier eyes in bright gyms */
+    .stApp { background-color: #0e1117; }
+    
+    /* The Entry Grid Styling */
+    [data-testid="stDataEditor"] {
+        background-color: #1a1c23; 
+        border: 2px solid #3d4452;
+        border-radius: 12px;
     }
-    .stButton > button { font-weight: bold; color: white; }
+
+    /* The Floating Mode Switcher at Bottom Middle */
+    .floating-nav {
+        position: fixed; 
+        bottom: 30px; 
+        left: 50%; 
+        transform: translateX(-50%);
+        z-index: 9999; 
+        background-color: #00ffcc; 
+        padding: 10px 30px;
+        border-radius: 50px; 
+        border: 2px solid #ffffff;
+        box-shadow: 0px 10px 30px rgba(0,255,204,0.4);
+    }
+    
+    /* Mode Switch Button Text */
+    .floating-nav button {
+        color: #000000 !important;
+        font-weight: bold !important;
+        background-color: transparent !important;
+        border: none !important;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #161920;
+        border-right: 1px solid #3d4452;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -28,6 +61,7 @@ if 'roster' not in st.session_state:
         "11 - Luna", "12 - Joy", "98 - Bria", "21 - Avery", "22 - Kannon"
     ]
 
+# Default Order of Stats (Until you send the drawing!)
 stat_cols = [
     'Played', 'Atk ATM', 'Atk K', 'Atk ERR', 'Atk %', 
     'Set AST', 'Srv ATM', 'Srv ACE', 'Srv ERR', 'Srv %', 
@@ -46,33 +80,45 @@ if 'master_data' not in st.session_state:
 def calculate_metrics(df):
     df = df.copy()
     for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if col not in ['Atk %', 'Srv %', 'SrvRev Avg']:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    
+    # Hitting %: (K-E)/Att
     df['Atk %'] = (df['Atk K'] - df['Atk ERR']) / df['Atk ATM'].replace(0, np.nan)
+    
+    # Serve %: (Att-E)/Att * 100
     df['Srv %'] = ((df['Srv ATM'] - df['Srv ERR']) / df['Srv ATM'].replace(0, np.nan)) * 100
+    
+    # Pass Rating: Weighted average
     total_passes = df['SrvRev ERR'] + df['SrvRev 1'] + df['SrvRev 2'] + df['SrvRev 3']
     pass_pts = (df['SrvRev 1']*1) + (df['SrvRev 2']*2) + (df['SrvRev 3']*3)
     df['SrvRev Avg'] = pass_pts / total_passes.replace(0, np.nan)
+    
     return df.fillna(0)
 
-# --- SIDEBAR DOWNLOAD (ALWAYS VISIBLE) ---
+# --- SIDEBAR (Download & Match Totals) ---
 with st.sidebar:
-    st.header("💾 Export Data")
-    # Combine all sets for a full match report
-    full_match = st.session_state.master_data["Set 1"] + st.session_state.master_data["Set 2"] + st.session_state.master_data["Set 3"]
-    final_csv_data = calculate_metrics(full_match)
+    st.title("🏐 VOODOO 15-2")
+    st.write("---")
+    st.subheader("Match Export")
     
-    csv = final_csv_data.to_csv().encode('utf-8')
+    # Quick Match Totals Math
+    full_match = st.session_state.master_data["Set 1"] + st.session_state.master_data["Set 2"] + st.session_state.master_data["Set 3"]
+    match_report = calculate_metrics(full_match)
+    
+    csv = match_report.to_csv().encode('utf-8')
     st.download_button(
-        label="📩 Download Match Report",
+        label="📩 DOWNLOAD CSV REPORT",
         data=csv,
-        file_name="Voodoo_Match_Totals.csv",
+        file_name="Voodoo_Full_Match.csv",
         mime='text/csv',
     )
-    st.info("This downloads all sets combined into one file.")
+    st.write("---")
+    st.caption("Tip: Switch to Summary Mode to see player-by-player percentages.")
 
 # --- NAVIGATION BUTTON ---
 st.markdown('<div class="floating-nav">', unsafe_allow_html=True)
-label = "📊 SWITCH TO SUMMARY MODE" if st.session_state.view_mode == "ENTRY" else "⌨️ SWITCH TO ENTRY MODE"
+label = "📊 VIEW SUMMARY MODE" if st.session_state.view_mode == "ENTRY" else "⌨️ RETURN TO ENTRY"
 if st.button(label):
     st.session_state.view_mode = "SUMMARY" if st.session_state.view_mode == "ENTRY" else "ENTRY"
     st.rerun()
@@ -80,20 +126,21 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # --- PAGE ROUTING ---
 if st.session_state.view_mode == "ENTRY":
-    st.title("🏐 STAT ENTRY")
-    active_set = st.radio("Active Match Set:", ["Set 1", "Set 2", "Set 3"], horizontal=True)
+    st.title("⌨️ STAT ENTRY")
+    active_set = st.radio("Select Set:", ["Set 1", "Set 2", "Set 3"], horizontal=True)
     
+    # Data Entry Grid (Math is disabled here for stability)
     edited_df = st.data_editor(
         st.session_state.master_data[active_set],
         use_container_width=True,
-        height=500,
+        height=550,
         key=f"editor_{active_set}"
     )
     st.session_state.master_data[active_set] = edited_df
 
 else:
-    st.title("🏆 STAT SUMMARY")
-    view_set = st.radio("View Totals:", ["Set 1", "Set 2", "Set 3", "Match Totals"], horizontal=True)
+    st.title("🏆 SUMMARY MODE")
+    view_set = st.radio("Display:", ["Set 1", "Set 2", "Set 3", "Match Totals"], horizontal=True)
     
     if view_set == "Match Totals":
         raw = st.session_state.master_data["Set 1"] + st.session_state.master_data["Set 2"] + st.session_state.master_data["Set 3"]
@@ -102,6 +149,7 @@ else:
     
     final_df = calculate_metrics(raw)
     
+    # High-Contrast Color Table
     st.table(
         final_df.style.format({
             'Atk %': '{:.3f}', 
